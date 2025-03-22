@@ -3,6 +3,7 @@ import { db } from "./db/db";
 import { v4 } from "uuid";
 import { AuthSessionManager, hashPassword } from "./auth";
 import { Request, Response } from "express";
+import { User } from "./db/schema";
 
 (async () => {
     const app = express();
@@ -31,6 +32,25 @@ import { Request, Response } from "express";
         }
 
         return then(userUUID);
+    }
+
+    function withAuthUser(
+        req: Request,
+        res: Response,
+        then: (user: User) => Promise<void> | void
+    ) {
+        return withAuth(req, res, async (userUUID) => {
+            const user = await db.selectOne(
+                db.fromTable("user", (q) => q.where("uuid").equals(userUUID))
+            );
+
+            if (!user) {
+                res.status(401).json({ error: "Unauthorized" });
+                return;
+            }
+
+            return then(user);
+        });
     }
 
     // SIGNUP
@@ -113,11 +133,7 @@ import { Request, Response } from "express";
 
     // IDENTITY
     app.get("/identity", (req, res) => {
-        withAuth(req, res, async (userUUID) => {
-            const user = await db.selectOne(
-                db.fromTable("user", (q) => q.where("uuid").equals(userUUID))
-            );
-
+        withAuthUser(req, res, (user) => {
             res.json({
                 message: "User found",
                 user,
