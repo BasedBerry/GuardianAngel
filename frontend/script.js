@@ -8,22 +8,32 @@ const preferencesInput = document.getElementById('preferences-input');
 let authToken = null;
 
 // Handle Sign Up
-signupForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
+document.getElementById('signup-form').addEventListener('submit', async (event) => {
+    event.preventDefault(); // Prevent the default form submission behavior
+
     const username = document.getElementById('signup-username').value;
     const password = document.getElementById('signup-password').value;
 
-    const response = await fetch('http://localhost:3000/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-    });
+    try {
+        const response = await fetch('http://100.66.76.49:3000/signup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, password }),
+        });
 
-    const data = await response.json();
-    if (response.ok) {
-        alert('Sign up successful! Please log in.');
-    } else {
-        alert(data.error || 'Sign up failed.');
+        if (response.ok) {
+            const data = await response.json();
+            alert('Signup successful!');
+            console.log(data); // Handle the response data as needed
+        } else {
+            const error = await response.json();
+            alert(`Signup failed: ${error.message}`);
+        }
+    } catch (err) {
+        console.error('Error:', err);
+        alert('An error occurred during signup.');
     }
 });
 
@@ -33,7 +43,7 @@ loginForm.addEventListener('submit', async (e) => {
     const username = document.getElementById('login-username').value;
     const password = document.getElementById('login-password').value;
 
-    const response = await fetch('http://localhost:3000/login', {
+    const response = await fetch('http://100.66.76.49:3000/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -59,7 +69,7 @@ savePreferencesButton.addEventListener('click', async () => {
         return;
     }
 
-    const response = await fetch('http://localhost:3000/preferences', {
+    const response = await fetch('http://100.66.76.49:3000/preferences', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
