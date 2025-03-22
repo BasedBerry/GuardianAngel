@@ -4,10 +4,12 @@ import { v4 } from "uuid";
 import { AuthSessionManager, hashPassword } from "./auth";
 import { Request, Response } from "express";
 import { User } from "./db/schema";
+import cors from "cors";
 
 (async () => {
     const app = express();
     app.use(express.json());
+    app.use(cors());
 
     await db.createTables();
     const authSessionManager = new AuthSessionManager(db);
