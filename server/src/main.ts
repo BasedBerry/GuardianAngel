@@ -7,6 +7,7 @@ import { User } from "./db/schema";
 
 (async () => {
     const app = express();
+    app.use(express.json());
 
     await db.createTables();
     const authSessionManager = new AuthSessionManager(db);
@@ -55,8 +56,10 @@ import { User } from "./db/schema";
 
     // SIGNUP
     app.post("/signup", async (req, res) => {
-        const username = req.body.username;
-        const password = req.body.password;
+        const username = req.body?.username;
+        const password = req.body?.password;
+
+        console.log(username, password, req.body);
 
         if (!username || !password) {
             res.status(400).json({
@@ -101,8 +104,8 @@ import { User } from "./db/schema";
 
     // LOGIN
     app.post("/login", async (req, res) => {
-        const username = req.body.username;
-        const password = req.body.password;
+        const username = req.body?.username;
+        const password = req.body?.password;
 
         if (!username || !password) {
             res.status(400).json({
@@ -135,8 +138,12 @@ import { User } from "./db/schema";
     app.get("/identity", (req, res) => {
         withAuthUser(req, res, (user) => {
             res.json({
-                message: "User found",
-                user,
+                user: {
+                    uuid: user.uuid,
+                    username: user.username,
+                    positivePreferences: user.positivePreferences,
+                    negativePreferences: user.negativePreferences,
+                },
             });
         });
     });
@@ -149,22 +156,22 @@ import { User } from "./db/schema";
 
             if (!positivePreferences && !negativePreferences) {
                 res.status(400).json({
-                    error: "Positive and negative preferences are required",
+                    error: "Positive or negative preferences are required",
                 });
                 return;
             }
 
-            db.updateRow(
-                "user",
-                {
-                    uuid: userUUID,
-                    positivePreferences: positivePreferences ?? "",
-                    negativePreferences: negativePreferences ?? "",
-                }
-            );
+            db.updateRow("user", {
+                uuid: userUUID,
+                positivePreferences: positivePreferences ?? "",
+                negativePreferences: negativePreferences ?? "",
+            });
+
+            res.json({
+                message: "Preferences updated successfully",
+            });
         });
     });
-
 
     app.listen(3000, () => {
         console.log("Server is running on port 3000");
