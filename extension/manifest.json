@@ -1,0 +1,13 @@
+{
+  "name": "YouTube Auto 'Not Interested'",
+  "description": "Automatically clicks 'Not interested' on videos with a certain keyword in the title.",
+  "version": "1.0",
+  "manifest_version": 3,
+  "content_scripts": [
+    {
+      "js": ["contentScript.js"],
+      "matches": ["https://www.youtube.com/*"]
+    }
+  ],
+  "permissions": []
+}
