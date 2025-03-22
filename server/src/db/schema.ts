@@ -9,7 +9,7 @@ export const schema = createSchema({
             username: DBType.string,
             passwordHash: DBType.string,
         },
-        primaryKey: "uuid",
+        primaryKey: "uuid" as const,
     },
 });
 
