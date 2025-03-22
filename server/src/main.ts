@@ -141,6 +141,31 @@ import { User } from "./db/schema";
         });
     });
 
+    // Update Preferences
+    app.post("/preferences", (req, res) => {
+        withAuth(req, res, async (userUUID) => {
+            const positivePreferences = req.body.positivePreferences;
+            const negativePreferences = req.body.negativePreferences;
+
+            if (!positivePreferences && !negativePreferences) {
+                res.status(400).json({
+                    error: "Positive and negative preferences are required",
+                });
+                return;
+            }
+
+            db.updateRow(
+                "user",
+                {
+                    uuid: userUUID,
+                    positivePreferences: positivePreferences ?? "",
+                    negativePreferences: negativePreferences ?? "",
+                }
+            );
+        });
+    });
+
+
     app.listen(3000, () => {
         console.log("Server is running on port 3000");
     });
