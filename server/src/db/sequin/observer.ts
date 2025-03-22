@@ -4,7 +4,7 @@ import {
 	RowReverseSerialized,
 	TableName,
 	UpdateRowPayload,
-} from "features/searchV2/sequin";
+} from "./types";
 
 export interface DBRowInsertEvent<T extends TableName<S>, S extends DBSchema> {
 	table: T;

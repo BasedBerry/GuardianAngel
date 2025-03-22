@@ -4,7 +4,8 @@ export const schema = createSchema({
     user: {
         columns: {
             uuid: DBType.string,
-            preferences: DBType.string,
+            positivePreferences: DBType.string,
+            negativePreferences: DBType.string,
             username: DBType.string,
             passwordHash: DBType.string,
         },
