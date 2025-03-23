@@ -5,6 +5,7 @@ import { AuthSessionManager, hashPassword } from "./auth";
 import { Request, Response } from "express";
 import { User } from "./db/schema";
 import cors from "cors";
+import { createPositiveNegativeTrigger } from "./pipeline/llm";
 
 (async () => {
     const app = express();
@@ -92,8 +93,9 @@ import cors from "cors";
 
         await db.upsertRow("user", {
             uuid,
-            positivePreferences: "",
-            negativePreferences: "",
+            triggers: [],
+            topics: [],
+            politics: [],
             username,
             passwordHash: hashPassword(password),
         });
@@ -143,8 +145,9 @@ import cors from "cors";
                 user: {
                     uuid: user.uuid,
                     username: user.username,
-                    positivePreferences: user.positivePreferences,
-                    negativePreferences: user.negativePreferences,
+                    triggers: user.triggers,
+                    topics: user.topics,
+                    politics: user.politics,
                 },
             });
         });
@@ -153,24 +156,34 @@ import cors from "cors";
     // Update Preferences
     app.post("/preferences", (req, res) => {
         withAuth(req, res, async (userUUID) => {
-            const positivePreferences = req.body.positivePreferences;
-            const negativePreferences = req.body.negativePreferences;
+            const prompt = req.body?.prompt;
 
-            if (!positivePreferences && !negativePreferences) {
+            if (!prompt) {
                 res.status(400).json({
-                    error: "Positive or negative preferences are required",
+                    error: "Prompt is required",
                 });
                 return;
             }
 
-            db.updateRow("user", {
+            const response = await createPositiveNegativeTrigger(prompt);
+
+            if (!response) {
+                res.status(500).json({ error: "Failed to update preferences" });
+                return;
+            }
+
+            await db.updateRow("user", {
                 uuid: userUUID,
-                positivePreferences: positivePreferences ?? "",
-                negativePreferences: negativePreferences ?? "",
+                triggers: response.triggers,
+                topics: response.topics,
+                politics: response.politics,
             });
 
             res.json({
                 message: "Preferences updated successfully",
+                triggers: response.triggers,
+                topics: response.topics,
+                politics: response.politics,
             });
         });
     });

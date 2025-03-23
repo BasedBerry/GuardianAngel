@@ -375,12 +375,7 @@ export class Database<
 	 */
 	async updateRow<T extends TableName<S>>(table: T, values: UpdateRowPayload<T, S>) {
 		await this._withMutex(async () => {
-			const pk = values[this.schema[table].primaryKey]!;
-			const commands = cmdUpdate(table, pk, values, this.schema);
-
-			for (const command of commands) {
-				await this._cxn.execute(command.sql, command.parameters as any[]);
-			}
+			await this.updateRows(table, [values]);
 
 			this.observer._rowUpdate.emit(table, { table, rows: [values] });
 		});

@@ -7,6 +7,7 @@ import {
 	getVectorColumns,
 	q,
 	normalizeStringValues,
+	jsonSerializeColumnsForInsert,
 } from "./util";
 import {
 	VTABLE_COLUMN_ORIGINPK,
@@ -30,7 +31,7 @@ export function cmdUpdate<T extends TableName<S>, S extends DBSchema>(
 	// Update main table
 	const mainUpdate = q
 		.updateTable(tableName)
-		.set(filterNonVirtualColumns(update, table))
+		.set(jsonSerializeColumnsForInsert(schema, tableName, filterNonVirtualColumns(update, table)))
 		.where(table.primaryKey, "=", pk)
 		.compile();
 	commands.push({ sql: mainUpdate.sql, parameters: mainUpdate.parameters });
@@ -85,7 +86,7 @@ export function cmdUpdateMany<T extends TableName<S>, S extends DBSchema>(
 	for (const row of rows) {
 		const mainUpdate = q
 			.updateTable(tableName)
-			.set(filterNonVirtualColumns(row, table))
+			.set(jsonSerializeColumnsForInsert(schema, tableName, filterNonVirtualColumns(row, table)))
 			.where(table.primaryKey, "=", row[table.primaryKey as keyof typeof row])
 			.compile();
 		commands.push(mainUpdate);

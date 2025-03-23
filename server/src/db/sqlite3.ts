@@ -22,6 +22,7 @@ export class CachedQueryExecutor {
         sql: string,
         parameters: any[]
     ): Promise<Record<string, any>[]> {
+        console.log(sql, parameters);
         let stmt = this.cache[sql];
 
         if (!stmt) {
