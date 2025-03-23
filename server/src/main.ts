@@ -156,27 +156,104 @@ process.env.OPENAI_API_KEY = "";
 
     // Update Preferences
     app.post("/preferences", (req, res) => {
-        withAuth(req, res, async (userUUID) => {
-            const positivePreferences = req.body.positivePreferences;
-            const negativePreferences = req.body.negativePreferences;
+      withAuth(req, res, async (userUUID) => {
+        const rawPositive = req.body.positivePreferences;
+        const rawNegative = req.body.negativePreferences;
 
-            if (!positivePreferences && !negativePreferences) {
-                res.status(400).json({
-                    error: "Positive or negative preferences are required",
-                });
-                return;
-            }
+        if (!rawPositive && !rawNegative) {
+          res.status(400).json({
+            error: "Positive or negative preferences are required",
+          });
+          return;
+        }
 
-            db.updateRow("user", {
-                uuid: userUUID,
-                positivePreferences: positivePreferences ?? "",
-                negativePreferences: negativePreferences ?? "",
-            });
+        try {
+          // Build GPT prompt
+          const prompt = `
+    A user has submitted the following preferences.
+    
+    Positive preferences (things they like):
+    ${rawPositive ?? ""}
+    
+    Negative preferences (things they dislike):
+    ${rawNegative ?? ""}
+    
+    Please rewrite each list clearly, combining similar concepts, removing redundancy, and formatting concisely.
+    Respond in strict JSON format:
+    
+    {
+      "positive": "cleaned and summarized positive preferences",
+      "negative": "cleaned and summarized negative preferences"
+    }
+    `;
 
-            res.json({
-                message: "Preferences updated successfully",
-            });
-        });
+          const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: "gpt-4o",
+              messages: [{ role: "user", content: prompt }],
+              max_tokens: 300,
+            }),
+          });
+
+          if (!openaiRes.ok) {
+            const err = await openaiRes.text();
+            console.error("OpenAI API error:", err);
+            res.status(500).json({ error: "OpenAI API call failed" });
+            return;
+          }
+
+          const json = await openaiRes.json() as {
+            choices?: { message?: { content?: string } }[];
+          };
+
+          const content = json.choices?.[0]?.message?.content?.trim();
+
+          if (!content) {
+            res.status(500).json({ error: "Invalid response from OpenAI" });
+            return;
+          }
+
+          // 🧼 Clean Markdown-style wrapping if present
+          let cleanedContent = content;
+          if (cleanedContent.startsWith("```")) {
+            cleanedContent = cleanedContent
+              .replace(/```(?:json)?\s*/i, "")
+              .replace(/```$/, "")
+              .trim();
+          }
+
+          let parsed: { positive?: string; negative?: string } = {};
+          try {
+            parsed = JSON.parse(cleanedContent);
+          } catch (err) {
+            console.error("Failed to parse GPT response:", cleanedContent);
+            res.status(500).json({ error: "GPT output was not valid JSON" });
+            return;
+          }
+
+          await db.updateRow("user", {
+            uuid: userUUID,
+            positivePreferences: parsed.positive ?? "",
+            negativePreferences: parsed.negative ?? "",
+          });
+
+          res.json({
+            message: "Preferences updated successfully",
+            processed: {
+              positive: parsed.positive ?? "",
+              negative: parsed.negative ?? "",
+            },
+          });
+        } catch (err) {
+          console.error("Unexpected error in /preferences:", err);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      });
     });
     app.post("/analyze-title", (req, res) => {
       withAuthUser(req, res, async (user) => {
