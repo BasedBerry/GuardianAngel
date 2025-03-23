@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ContentNuke</title>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    html, body {
+      width: 400px;
+      height: 540px;
+      font-family: 'Quicksand', sans-serif;
+      background: #ffe6f0;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    .container {
+      background: #ffd6e8;
+      margin: 20px;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .cat-box {
+      text-align: center;
+      line-height: 1.2;
+      margin-bottom: 8px;
+      animation: pulse 2.5s ease-in-out infinite;
+    }
+
+    pre.cat-art {
+      margin: 0;
+      font-size: 16px;
+      text-align: center;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    .nuke {
+      color: #facc15;
+      text-shadow: 0 0 6px #facc15, 0 0 12px #facc15;
+      font-weight: bold;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.85; transform: scale(1.02); }
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: bold;
+      text-align: center;
+      margin-top: 4px;
+    }
+
+    h2 {
+      font-size: 18px;
+      text-align: center;
+      margin-bottom: 20px;
+      color: #374151;
+    }
+
+    label {
+      font-size: 14px;
+      font-weight: 500;
+      margin-top: 16px;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    textarea, input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #fbb6ce;
+      border-radius: 6px;
+      font-size: 14px;
+      background: #fff0f5;
+      color: #111827;
+    }
+
+    button {
+      background-color: #f472b6;
+      color: white;
+      font-weight: bold;
+      border: none;
+      padding: 10px;
+      border-radius: 6px;
+      margin-top: 20px;
+      width: 100%;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #ec4899;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .toggle-link {
+      text-align: center;
+      font-size: 13px;
+      margin-top: 14px;
+      cursor: pointer;
+      color: #9333ea;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="cat-box" id="cat-box">
+      <pre class="cat-art" id="cat-ears"> /ᐠ｡‿｡ᐟ\\</pre>
+      <pre class="cat-art" id="cat-face">( ˶•̀ᴗ•́˶ )</pre>
+      <pre class="cat-art" id="cat-paws">/ &gt;<span class="nuke">☢️</span>&lt; \\</pre>
+      <h1>ContentNuke</h1>
+    </div>
+
+    <h2>Your Preferences</h2>
+
+    <div id="auth-section">
+      <form id="signup-form">
+        <label for="signup-username">Username</label>
+        <input type="text" id="signup-username" placeholder="Choose a username" required />
+
+        <label for="signup-password">Password</label>
+        <input type="password" id="signup-password" placeholder="Choose a password" required />
+
+        <button type="submit">Sign Up</button>
+        <div class="toggle-link" id="show-login">Already have an account? Log In</div>
+      </form>
+
+      <form id="login-form" class="hidden">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" placeholder="Enter username" required />
+
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" placeholder="Enter password" required />
+
+        <button type="submit">Log In</button>
+        <div class="toggle-link" id="show-signup">Don't have an account? Sign Up</div>
+      </form>
+    </div>
+
+    <div id="preferences-section" class="hidden">
+      <label for="positive-preferences">🔼 What to Boost</label>
+      <textarea id="positive-preferences" rows="3"></textarea>
+
+      <label for="negative-preferences">🔽 What to Nuke</label>
+      <textarea id="negative-preferences" rows="3"></textarea>
+
+      <button id="save-preferences">Save Preferences</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
