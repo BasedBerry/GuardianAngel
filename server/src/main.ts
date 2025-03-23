@@ -192,7 +192,7 @@ import {
     });
 
     // Title filter
-    app.post("/title-filter", (req, res) => {
+    app.post("/removals", (req, res) => {
         withAuthUser(req, res, async (user) => {
             const titles = req.body?.titles;
 
