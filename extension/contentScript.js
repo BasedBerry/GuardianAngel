@@ -1,19 +1,38 @@
-
-chrome.runtime.sendMessage({ type: "likeSearchResults" }, (response) => {
-  console.log("Triggered likeSearchResults:", response);
-});
-
-
-
-const KEYWORD = "Jeopardy";
-let lastHandledShortsTitle = null;
 let oauthToken = null;
+let authToken = null;
+let lastHandledShortsTitle = null;
+const matchedFeedVideos = new Set();
 
 // -------------------------------
-// Utility
+// GPT Relevance Check via Backend
 // -------------------------------
-function titleMatches(text) {
-  return text.toLowerCase().includes(KEYWORD.toLowerCase());
+async function isRelevantToKeyword(title) {
+  if (!authToken) {
+    console.warn("[EXTENSION] No backend auth token available");
+    return false;
+  }
+
+  try {
+    const response = await fetch("http://localhost:3000/analyze-title", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": authToken,
+      },
+      body: JSON.stringify({ title }),
+    });
+
+    if (!response.ok) {
+      console.warn("[EXTENSION] Server returned non-200:", response.status);
+      return false;
+    }
+
+    const data = await response.json();
+    return !!data.relevant;
+  } catch (error) {
+    console.error("[EXTENSION] Failed to call backend:", error);
+    return false;
+  }
 }
 
 // -------------------------------
@@ -38,6 +57,7 @@ function markFeedVideoNotInterested(video) {
         console.log("[EXTENSION][FEED] Clicking 'Not interested'...");
         item.click();
         video.dataset.notInterestedClicked = "true";
+        matchedFeedVideos.delete(video);
         clicked = true;
         break;
       }
@@ -46,7 +66,7 @@ function markFeedVideoNotInterested(video) {
     if (!clicked) {
       console.warn("[EXTENSION][FEED] 'Not interested' option not found.");
     }
-  }, 500);
+  }, 220);
 }
 
 function scanFeed() {
@@ -59,10 +79,20 @@ function scanFeed() {
     if (!titleEl) return;
 
     const title = titleEl.innerText.trim();
-    if (titleMatches(title)) {
-      console.log(`[EXTENSION][FEED] Match: "${title}"`);
+
+    if (matchedFeedVideos.has(video)) {
+      console.log(`[EXTENSION][FEED] Retrying GPT-confirmed: "${title}"`);
       markFeedVideoNotInterested(video);
+      return;
     }
+
+    isRelevantToKeyword(title).then((relevant) => {
+      if (relevant) {
+        console.log(`[EXTENSION][FEED] GPT matched: "${title}"`);
+        matchedFeedVideos.add(video);
+        markFeedVideoNotInterested(video);
+      }
+    });
   });
 }
 
@@ -125,24 +155,22 @@ function markVisibleShortAsNotRecommended() {
     if (!found) {
       console.warn("[EXTENSION][SHORTS] Menu opened, but 'Don't recommend' not found.");
     }
-  }, 500);
+  }, 220);
 }
 
 function scanShorts() {
   const currentTitle = getVisibleShortsTitle();
-  if (!currentTitle) return;
-
-  if (currentTitle === lastHandledShortsTitle) return;
+  if (!currentTitle || currentTitle === lastHandledShortsTitle) return;
 
   console.log(`[EXTENSION][SHORTS] Current Shorts title: "${currentTitle}"`);
 
-  if (titleMatches(currentTitle)) {
-    console.log(`[EXTENSION][SHORTS] Title matches "${KEYWORD}". Taking action...`);
-    markVisibleShortAsNotRecommended();
+  isRelevantToKeyword(currentTitle).then((relevant) => {
+    if (relevant) {
+      console.log(`[EXTENSION][SHORTS] GPT matched: "${currentTitle}"`);
+      markVisibleShortAsNotRecommended();
+    }
     lastHandledShortsTitle = currentTitle;
-  } else {
-    lastHandledShortsTitle = currentTitle;
-  }
+  });
 }
 
 // -------------------------------
@@ -171,22 +199,42 @@ function runExtensionLoop() {
 }
 
 // -------------------------------
-// Auth First, Then Start Logic
+// Init
 // -------------------------------
 function initExtension() {
+  // Get YouTube OAuth token
   chrome.runtime.sendMessage({ type: "getAuthToken" }, (response) => {
     if (response?.token) {
       oauthToken = response.token;
       console.log("[EXTENSION] Got OAuth token:", oauthToken);
+    } else {
+      console.warn("[EXTENSION] Failed to get OAuth token:", response?.error);
+    }
+  });
 
-      // Now start the main extension logic
+  // Get backend auth token and trigger background flow
+  chrome.storage.local.get(['authToken'], ({ authToken: storedToken }) => {
+    if (storedToken) {
+      authToken = storedToken;
+      console.log("[EXTENSION] Got backend auth token:", authToken);
+
+      // ✅ Trigger search + like flow in background
+      chrome.runtime.sendMessage({ type: "searchAndLikeFromPreferences" }, (response) => {
+        if (response?.status) {
+          console.log("[EXTENSION] Search & like flow triggered:", response.status);
+        } else {
+          console.warn("[EXTENSION] Could not start search & like flow:", response?.error);
+        }
+      });
+
       runExtensionLoop();
       if (!location.href.includes("/shorts/")) {
         logAllFeedVideoTitles();
       }
-      setInterval(runExtensionLoop, 4000);
+
+      setInterval(runExtensionLoop, 2600);
     } else {
-      console.warn("[EXTENSION] Failed to get token:", response?.error);
+      console.warn("[EXTENSION] No backend auth token found. Please log in via popup.");
     }
   });
 }
