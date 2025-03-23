@@ -3,11 +3,21 @@
   "description": "Automatically clicks 'Not interested' on videos with a certain keyword in the title.",
   "version": "1.0",
   "manifest_version": 3,
+  "permissions": ["identity", "scripting"],
+  "oauth2": {
+    "client_id": "628059686685-9ukusc85m5heuknjk2oilrl34j658nqo.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/youtube.force-ssl"
+    ]
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "js": ["contentScript.js"],
       "matches": ["https://www.youtube.com/*"]
     }
   ],
-  "permissions": []
+  "host_permissions": ["https://www.googleapis.com/"]
 }
