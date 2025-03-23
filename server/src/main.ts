@@ -5,7 +5,10 @@ import { AuthSessionManager, hashPassword } from "./auth";
 import { Request, Response } from "express";
 import { User } from "./db/schema";
 import cors from "cors";
-import { createPositiveNegativeTrigger } from "./pipeline/llm";
+import {
+    createPositiveNegativeTrigger,
+    recommendVideosToRemove,
+} from "./pipeline/llm";
 
 (async () => {
     const app = express();
@@ -184,6 +187,45 @@ import { createPositiveNegativeTrigger } from "./pipeline/llm";
                 triggers: response.triggers,
                 topics: response.topics,
                 politics: response.politics,
+            });
+        });
+    });
+
+    // Title filter
+    app.post("/title-filter", (req, res) => {
+        withAuthUser(req, res, async (user) => {
+            const titles = req.body?.titles;
+
+            if (!titles) {
+                res.status(400).json({ error: "Titles are required" });
+                return;
+            }
+
+            if (!Array.isArray(titles)) {
+                res.status(400).json({ error: "Titles must be an array" });
+                return;
+            }
+
+            if (titles.length === 0) {
+                res.status(400).json({ error: "Titles array cannot be empty" });
+                return;
+            }
+
+            const response = await recommendVideosToRemove(
+                user.triggers,
+                user.topics,
+                user.politics,
+                titles
+            );
+
+            if (!response) {
+                res.status(500).json({ error: "Failed to filter titles" });
+                return;
+            }
+
+            res.json({
+                message: "Titles filtered successfully",
+                titles: response,
             });
         });
     });

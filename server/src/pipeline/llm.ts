@@ -9,23 +9,45 @@ const client = new CohereClient({
 });
 
 export async function recommendVideosToRemove(
-    negativePreferences: string[],
-    videoTitles: string[]
+    triggers: string[],
+    topics: string[],
+    politics: string[],
+    titles: string[]
 ): Promise<string[] | null> {
-    const prompt = `
-You are to help users filter out unwanted videos based on their preferences. The user has provided the following negative preferences:
+    const prompt = `You're a youtube feed-manipulator, removing videos from a users feed based on preferences they've given you. You'll be given three lines of preferences as input: triggers, topics, and politics, and a list of youtube video titles and channels.
 
-${negativePreferences.map((pref, index) => `${index + 1}. ${pref}`).join("\n")}
+Triggers are videos that need to removed regardless of context. They're usually related to addictions or mental illnesses like PTSD and OCD. For example, all "gambling" videos or all "suicide" related videos might need to be removed.
+
+Topics are videos that the user finds annoying or uninteresting. You should remove videos that you think are likely part of the same trend as the listen preference.
+
+Politics videos should not be removed just for discussing a topic. They should only be removed if the video actively aligns with the given keyword. So, if the keyword is "racism", racist videos should be removed. But, videos criticising or opposing racism should not be removed. 
+
+You should use your knowledge of specific youtube channels and popular culture to make decisions. For example, using your knowledge of if youtubers are left wing or right wing. You will usually not be able to work out if a video exactly matches a preference, so you should remove it if there's a fair probability it matches. However, in the case of the "politics" category, you might correctly identify that a video is related to the preference, but be unsure as to if it supports or opposes the view in question. In this case, you should lean on the side of not-removing.
+
+Here are the users triggers:
+${triggers.map((trigger) => `- ${trigger}`).join("\n")}
+
+Here are the users topics:
+${topics.map((topic) => `- ${topic}`).join("\n")}
+
+Here are the users politics:
+${politics.map((politic) => `- ${politic}`).join("\n")}
 
 Here are the titles of videos currently visible to the user:
+${titles.map((title) => `- ${title}`).join("\n")}
 
-${videoTitles.map((title, index) => `${index + 1}. ${title}`).join("\n")}
+Respond with the titles of videos that should be removed.`;
+    const schema = z.object({
+        titles: z.array(z.string()),
+    });
 
-Based on the user's negative preferences, recommend which videos should be removed. Respond with a JSON array of video titles to remove.`;
+    const response = await jsonStructuredChat(prompt, schema);
 
-    const schema = z.array(z.string());
+    if (!response) {
+        return null;
+    }
 
-    return jsonStructuredChat(prompt, schema);
+    return response.titles;
 }
 
 export async function createPositiveNegativeTrigger(summary: string) {
@@ -46,6 +68,9 @@ Summary: ${summary}.`;
     return jsonStructuredChat(prompt, schema);
 }
 
+/**
+ * Create a structured response from the LLM.
+ */
 export async function jsonStructuredChat<T extends z.ZodTypeAny>(
     prompt: string,
     schema: T
@@ -63,8 +88,8 @@ export async function jsonStructuredChat<T extends z.ZodTypeAny>(
             ],
         },
     });
-    console.log(response.text);
-    console.log(zodToTypeString(schema));
+
+    console.log(prompt);
 
     if (response.generationId) {
         try {
