@@ -84,7 +84,7 @@ function searchAndLikeFromPreferences(ytToken, backendToken) {
 
     return Promise.all(
       channels.map(channel =>
-        searchVideos(ytToken, channel, 1).then(videoIds =>
+        searchVideos(ytToken, channel, 3).then(videoIds =>
           Promise.all(videoIds.map(id => likeVideo(id, ytToken)))
         )
       )
