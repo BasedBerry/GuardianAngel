@@ -5,10 +5,10 @@ import { AuthSessionManager, hashPassword } from "./auth";
 import { Request, Response } from "express";
 import { User } from "./db/schema";
 import cors from "cors";
-import {
-    createPositiveNegativeTrigger,
-    recommendVideosToRemove,
-} from "./pipeline/llm";
+import fetch from "node-fetch"; // for calling OpenAI
+
+process.env.OPENAI_API_KEY = "";
+
 
 (async () => {
     const app = express();
@@ -96,9 +96,8 @@ import {
 
         await db.upsertRow("user", {
             uuid,
-            triggers: [],
-            topics: [],
-            politics: [],
+            positivePreferences: "",
+            negativePreferences: "",
             username,
             passwordHash: hashPassword(password),
         });
@@ -148,9 +147,8 @@ import {
                 user: {
                     uuid: user.uuid,
                     username: user.username,
-                    triggers: user.triggers,
-                    topics: user.topics,
-                    politics: user.politics,
+                    positivePreferences: user.positivePreferences,
+                    negativePreferences: user.negativePreferences,
                 },
             });
         });
@@ -159,75 +157,165 @@ import {
     // Update Preferences
     app.post("/preferences", (req, res) => {
         withAuth(req, res, async (userUUID) => {
-            const prompt = req.body?.prompt;
+            const positivePreferences = req.body.positivePreferences;
+            const negativePreferences = req.body.negativePreferences;
 
-            if (!prompt) {
+            if (!positivePreferences && !negativePreferences) {
                 res.status(400).json({
-                    error: "Prompt is required",
+                    error: "Positive or negative preferences are required",
                 });
                 return;
             }
 
-            const response = await createPositiveNegativeTrigger(prompt);
-
-            if (!response) {
-                res.status(500).json({ error: "Failed to update preferences" });
-                return;
-            }
-
-            await db.updateRow("user", {
+            db.updateRow("user", {
                 uuid: userUUID,
-                triggers: response.triggers,
-                topics: response.topics,
-                politics: response.politics,
+                positivePreferences: positivePreferences ?? "",
+                negativePreferences: negativePreferences ?? "",
             });
 
             res.json({
                 message: "Preferences updated successfully",
-                triggers: response.triggers,
-                topics: response.topics,
-                politics: response.politics,
             });
         });
     });
+    app.post("/analyze-title", (req, res) => {
+      withAuthUser(req, res, async (user) => {
+        const title = req.body?.title;
 
-    // Title filter
-    app.post("/removals", (req, res) => {
-        withAuthUser(req, res, async (user) => {
-            const titles = req.body?.titles;
+        if (!title) {
+          res.status(400).json({ error: "Missing title" });
+          return;
+        }
 
-            if (!titles) {
-                res.status(400).json({ error: "Titles are required" });
-                return;
-            }
+        const prompt = `
+    The user dislikes the following topics: ${user.negativePreferences}.
+    Is the YouTube video title "${title}" related to any of those topics?
+    Reply only with "Yes" or "No".
+        `;
 
-            if (!Array.isArray(titles)) {
-                res.status(400).json({ error: "Titles must be an array" });
-                return;
-            }
+        try {
+          const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: "gpt-4o",
+              messages: [{ role: "user", content: prompt }],
+              max_tokens: 3,
+            }),
+          });
 
-            if (titles.length === 0) {
-                res.status(400).json({ error: "Titles array cannot be empty" });
-                return;
-            }
+          if (!openaiRes.ok) {
+            const errJson = await openaiRes.json().catch(() => ({}));
+            console.error("OpenAI API error:", errJson);
+            res.status(500).json({ error: "OpenAI API call failed" });
+            return;
+          }
 
-            const response = await recommendVideosToRemove(
-                user.triggers,
-                user.topics,
-                user.politics,
-                titles
-            );
+          // ⛔️ Unsafe type assertion (as requested)
+          const json = await openaiRes.json() as {
+            choices?: { message?: { content?: string } }[];
+          };
 
-            if (!response) {
-                res.status(500).json({ error: "Failed to filter titles" });
-                return;
-            }
+          const message = json.choices?.[0]?.message?.content?.toLowerCase().trim();
 
-            res.json({
-                message: "Titles filtered successfully",
-                titles: response,
-            });
-        });
+          if (!message) {
+            console.error("Unexpected OpenAI response format:", json);
+            res.status(500).json({ error: "Invalid response from OpenAI" });
+            return;
+          }
+
+          const isRelevant = message.startsWith("yes");
+          res.json({ relevant: isRelevant });
+
+        } catch (err) {
+          console.error("Error calling OpenAI:", err);
+          res.status(500).json({ error: "Failed to analyze title" });
+        }
+      });
+    });
+
+    app.get("/recommended-channels", (req, res) => {
+      withAuthUser(req, res, async (user) => {
+        const preferences = user.positivePreferences;
+
+        if (!preferences || preferences.trim() === "") {
+          res.status(400).json({ error: "No positive preferences found" });
+          return;
+        }
+
+        const prompt = `
+    The user is interested in the following topics: ${preferences}.
+    Based on this, recommend 2 popular YouTube channels that create content about these topics.
+    Reply ONLY with a JSON array of channel names like: ["Channel A", "Channel B"].
+    Do not include any explanation or extra text.
+    `;
+
+        try {
+          const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: "gpt-4o",
+              messages: [{ role: "user", content: prompt }],
+              max_tokens: 100,
+            }),
+          });
+
+          if (!openaiRes.ok) {
+            const errBody = await openaiRes.text();
+            console.error("OpenAI API error:", errBody);
+            res.status(500).json({ error: "OpenAI API call failed" });
+            return;
+          }
+
+          const json = await openaiRes.json() as {
+            choices?: { message?: { content?: string } }[];
+          };
+
+          const content = json.choices?.[0]?.message?.content?.trim();
+
+          if (!content) {
+            console.error("No content in OpenAI response:", json);
+            res.status(500).json({ error: "Invalid response from OpenAI" });
+            return;
+          }
+
+          // 🧼 Clean Markdown-style wrapping (```json ... ```)
+          let cleanedContent = content;
+          if (cleanedContent.startsWith("```")) {
+            cleanedContent = cleanedContent
+              .replace(/```(?:json)?\s*/i, "") // remove opening ```
+              .replace(/```$/, "")            // remove closing ```
+              .trim();
+          }
+
+          let channels: string[] = [];
+          try {
+            channels = JSON.parse(cleanedContent);
+          } catch (err) {
+            console.error("Failed to parse GPT output:", cleanedContent);
+            res.status(500).json({ error: "GPT output was not valid JSON" });
+            return;
+          }
+
+          if (!Array.isArray(channels)) {
+            res.status(500).json({ error: "Invalid format from GPT" });
+            return;
+          }
+
+          res.json({ channels: channels.slice(0, 2) });
+
+        } catch (err) {
+          console.error("Unexpected error in /recommended-channels:", err);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      });
     });
 
     app.listen(3000, () => {
