@@ -8,7 +8,7 @@ function getFreshAuthToken(callback) {
       return callback(null);
     }
 
-    console.log("[EXTENSION] Got token:", token);
+    console.log("[EXTENSION] Got OAuth token:", token);
     setTimeout(() => callback(token), 200); // slight delay prevents race conditions
   });
 }
@@ -25,99 +25,118 @@ function refreshTokenAndRetry(callback) {
 }
 
 // ----------------------------
+// Backend: Get recommended channels from GPT
+// ----------------------------
+function fetchRecommendedChannels(backendToken) {
+  return fetch("http://localhost:3000/recommended-channels", {
+    headers: {
+      Authorization: backendToken
+    }
+  })
+    .then(res => res.json())
+    .then(data => data.channels || []);
+}
+
+// ----------------------------
 // YouTube API Helpers
 // ----------------------------
-function searchVideos(token, query = "Professor Live Basketball", max = 6) {
-  console.log("[EXTENSION] Starting searchVideos with token:", token);
-
+function searchVideos(ytToken, query, max = 3) {
   return fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${max}`, {
     headers: {
-      Authorization: `Bearer ${token}`
+      Authorization: `Bearer ${ytToken}`
     }
   })
     .then(res => {
-      console.log("[EXTENSION] Search response status:", res.status);
       if (!res.ok) {
         return res.text().then(text => {
-          console.error("[EXTENSION] Search API error body:", text);
-          if (res.status === 401) throw new Error("unauthorized");
+          console.error("[EXTENSION] Search API error:", text);
           throw new Error("search_failed");
         });
       }
       return res.json();
     })
-    .then(data => {
-      console.log("[EXTENSION] Search data received:", data);
-      const videoIds = data.items?.map(item => item.id.videoId).filter(Boolean) || [];
-      return videoIds;
-    });
+    .then(data => (data.items || []).map(item => item.id.videoId).filter(Boolean));
 }
 
-function likeVideo(videoId, token) {
-  console.log(`[EXTENSION] Liking video: ${videoId}`);
+function likeVideo(videoId, ytToken) {
   return fetch(`https://www.googleapis.com/youtube/v3/videos/rate?id=${videoId}&rating=like`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`
+      Authorization: `Bearer ${ytToken}`
     }
   }).then(res => {
-    console.log(`[EXTENSION] Like response status for ${videoId}:`, res.status);
     if (!res.ok) {
       return res.text().then(text => {
         console.warn(`[EXTENSION] Failed to like video ${videoId}. Body:`, text);
-        if (res.status === 401) throw new Error("unauthorized");
         throw new Error("like_failed");
       });
-    } else {
-      console.log(`[EXTENSION] Successfully liked video: ${videoId}`);
+    }
+    console.log(`[EXTENSION] Successfully liked video: ${videoId}`);
+  });
+}
+
+// ----------------------------
+// GPT-based search + like flow
+// ----------------------------
+function searchAndLikeFromPreferences(ytToken, backendToken) {
+  fetchRecommendedChannels(backendToken).then(channels => {
+    console.log("[EXTENSION] Recommended channels:", channels);
+
+    return Promise.all(
+      channels.map(channel =>
+        searchVideos(ytToken, channel, 1).then(videoIds =>
+          Promise.all(videoIds.map(id => likeVideo(id, ytToken)))
+        )
+      )
+    );
+  }).then(() => {
+    console.log("[EXTENSION] Finished liking recommended content");
+  }).catch(err => {
+    console.error("[EXTENSION] Error in search/like flow:", err);
+    if (err.message === "unauthorized") {
+      console.warn("[EXTENSION] YouTube token expired, refreshing...");
+      refreshTokenAndRetry((newYtToken) => {
+        if (!newYtToken) return;
+        searchAndLikeFromPreferences(newYtToken, backendToken);
+      });
     }
   });
 }
 
 // ----------------------------
-// Search and Like Flow
-// ----------------------------
-function searchAndLike(token) {
-  searchVideos(token)
-    .then(videoIds => {
-      console.log("[EXTENSION] Attempting to like videos:", videoIds);
-      return Promise.all(videoIds.map(id => likeVideo(id, token)));
-    })
-    .catch(err => {
-      if (err.message === "unauthorized") {
-        console.warn("[EXTENSION] Token unauthorized. Refreshing and retrying...");
-        refreshTokenAndRetry(searchAndLike);
-      } else {
-        console.error("[EXTENSION] YouTube API error:", err);
-      }
-    });
-}
-
-// ----------------------------
-// Message Listener: likeSearchResults
+// Message Listener
 // ----------------------------
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "likeSearchResults") {
-    console.log("[EXTENSION] Starting search and like flow...");
-    getFreshAuthToken((token) => {
-      if (token) {
-        searchAndLike(token);
-        sendResponse({ status: "Search and like flow triggered" });
-      } else {
-        sendResponse({ error: "Failed to get token" });
+  if (message.type === "searchAndLikeFromPreferences") {
+    console.log("[EXTENSION] Received message to start search-and-like flow");
+
+    // Get both tokens: YouTube + backend
+    getFreshAuthToken((ytToken) => {
+      if (!ytToken) {
+        console.error("[EXTENSION] Could not get YouTube OAuth token");
+        sendResponse({ error: "No YouTube token" });
+        return;
       }
+
+      chrome.storage.local.get(["authToken"], ({ authToken }) => {
+        if (!authToken) {
+          console.error("[EXTENSION] No backend auth token");
+          sendResponse({ error: "No backend token" });
+          return;
+        }
+
+        searchAndLikeFromPreferences(ytToken, authToken);
+        sendResponse({ status: "Started search and like flow" });
+      });
     });
 
-    return true; // Keeps message port open for async sendResponse
+    return true; // Keep async channel open
   }
 
-  // ----------------------------
-  // Message Listener: getAuthToken
-  // ----------------------------
+  // Token passthrough for content script
   if (message.type === "getAuthToken") {
     getFreshAuthToken((token) => {
       if (token) {
-        console.log("[EXTENSION] Returning token to sender");
         sendResponse({ token });
       } else {
         sendResponse({ error: "Failed to get token" });
