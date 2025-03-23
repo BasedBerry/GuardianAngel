@@ -7,26 +7,41 @@ const client = new CohereClient({
     token: env.cohereAPIKey,
 });
 
-export async function generateText(prompt: string) {
-    const response = await client.generate({
-        model: env.modelName,
-        prompt,
-    });
+export async function recommendVideosToRemove(
+    negativePreferences: string[],
+    videoTitles: string[]
+): Promise<string[]> {
+    const prompt = `
+You are to help users filter out unwanted videos based on their preferences. The user has provided the following negative preferences:
 
-    return response.generations[0].text;
-}
+${negativePreferences.map((pref, index) => `${index + 1}. ${pref}`).join("\n")}
 
-export async function generateJSON<T>(prompt: string, schema: z.ZodSchema<T>) {
+Here are the titles of videos currently visible to the user:
+
+${videoTitles.map((title, index) => `${index + 1}. ${title}`).join("\n")}
+
+Based on the user's negative preferences, recommend which videos should be removed. Respond with a JSON array of video titles to remove.
+`;
+
+    const schema = z.array(z.string());
+
     const response = await client.chat({
         model: env.modelName,
-        message: prompt + "\n\n" + "Please respond with a JSON object",
+        message: prompt,
         responseFormat: {
             type: "json_object",
-            schema: zodToJsonSchema(schema, "mySchema").definitions?.[
-                "mySchema"
-            ],
+            schema: zodToJsonSchema(schema, "VideoRemovalSchema").definitions?.["VideoRemovalSchema"],
         },
     });
 
-    console.log(response);
+    if (response.generationId) {
+        try {
+            return JSON.parse(response.generationId); // Adjust parsing logic if necessary
+        } catch (error) {
+            console.error("Failed to parse response:", error);
+            return [];
+        }
+    }
+
+    return [];
 }
