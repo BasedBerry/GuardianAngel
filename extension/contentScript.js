@@ -1,4 +1,6 @@
-const KEYWORD = "chess"; // Customize your keyword here
+const KEYWORD = "Jeopardy";
+let lastHandledShortsTitle = null;
+let oauthToken = null;
 
 // -------------------------------
 // Utility
@@ -8,7 +10,7 @@ function titleMatches(text) {
 }
 
 // -------------------------------
-// Feed Logic (Regular Videos)
+// Feed Logic
 // -------------------------------
 function markFeedVideoNotInterested(video) {
   const moreButton = video.querySelector('button#button[aria-label]');
@@ -58,10 +60,8 @@ function scanFeed() {
 }
 
 // -------------------------------
-// Shorts Logic (Now Uses Visible Card)
+// Shorts Logic
 // -------------------------------
-let lastHandledShortsTitle = null;
-
 function getVisibleShortCard() {
   const cards = document.querySelectorAll("ytd-reel-video-renderer, ytd-reel-player-renderer");
 
@@ -163,11 +163,25 @@ function runExtensionLoop() {
   }
 }
 
-// Run every 4 seconds
-setInterval(runExtensionLoop, 4000);
+// -------------------------------
+// Auth First, Then Start Logic
+// -------------------------------
+function initExtension() {
+  chrome.runtime.sendMessage({ type: "getAuthToken" }, (response) => {
+    if (response?.token) {
+      oauthToken = response.token;
+      console.log("[EXTENSION] Got OAuth token:", oauthToken);
 
-// Initial run
-if (!location.href.includes("/shorts/")) {
-  logAllFeedVideoTitles();
+      // Now start the main extension logic
+      runExtensionLoop();
+      if (!location.href.includes("/shorts/")) {
+        logAllFeedVideoTitles();
+      }
+      setInterval(runExtensionLoop, 4000);
+    } else {
+      console.warn("[EXTENSION] Failed to get token:", response?.error);
+    }
+  });
 }
-runExtensionLoop();
+
+initExtension();
