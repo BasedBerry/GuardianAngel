@@ -1,9 +1,13 @@
 {
   "name": "YouTube Auto 'Not Interested'",
-  "description": "Automatically clicks 'Not interested' on videos with a certain keyword in the title.",
+  "description": "Automatically clicks 'Not interested' on videos based on GPT analysis of the title.",
   "version": "1.0",
   "manifest_version": 3,
-  "permissions": ["identity", "scripting"],
+  "permissions": [
+    "identity",
+    "scripting",
+    "storage"
+  ],
   "oauth2": {
     "client_id": "628059686685-9ukusc85m5heuknjk2oilrl34j658nqo.apps.googleusercontent.com",
     "scopes": [
@@ -19,5 +23,13 @@
       "matches": ["https://www.youtube.com/*"]
     }
   ],
-  "host_permissions": ["https://www.googleapis.com/"]
+  "host_permissions": [
+    "https://www.googleapis.com/",
+    "https://api.openai.com/*",
+    "http://localhost:3000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "GuardianAngel"
+  }
 }
