@@ -15,8 +15,11 @@ function triggerCatReaction() {
   const original = catFace.textContent;
 
   catFace.textContent = '( ✧≖ ͜ʖ≖)';
+  catFace.classList.add('cat-react');
+
   setTimeout(() => {
     catFace.textContent = original;
+    catFace.classList.remove('cat-react');
   }, 1800);
 }
 
@@ -92,10 +95,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       const data = await res.json();
-      if (res.ok) {
+     if (res.ok) {
         triggerCatReaction();
-        alert('Preferences saved!');
-      } else {
+
+      setTimeout(() => {
+          alert('Preferences saved!');
+        }, 1000); // wait 1 second so user sees the cat reaction
+} else {
         alert(data.error || 'Failed to save preferences.');
       }
     });
