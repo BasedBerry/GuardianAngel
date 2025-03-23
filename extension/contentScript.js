@@ -1,3 +1,10 @@
+
+chrome.runtime.sendMessage({ type: "likeSearchResults" }, (response) => {
+  console.log("Triggered likeSearchResults:", response);
+});
+
+
+
 const KEYWORD = "Jeopardy";
 let lastHandledShortsTitle = null;
 let oauthToken = null;
